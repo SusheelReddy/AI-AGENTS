@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoginPage } from '../LoginPage';
 
@@ -25,11 +25,12 @@ describe('LoginPage', () => {
   });
 
   it('validates required fields on submit with empty inputs', async () => {
+    const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(<LoginPage onSubmit={onSubmit} />);
 
     const submitBtn = screen.getByRole('button', { name: 'Sign in' });
-    fireEvent.click(submitBtn);
+    await user.click(submitBtn);
 
     expect(await screen.findByText('Email is required')).toBeDefined();
     expect(await screen.findByText('Password is required')).toBeDefined();
@@ -84,6 +85,31 @@ describe('LoginPage', () => {
         password: 'password123',
         rememberMe: true,
       });
+    });
+  });
+
+  it('handles loading state during form submission', async () => {
+    const user = userEvent.setup();
+    let resolveSubmit: () => void;
+    const pendingPromise = new Promise<void>((resolve) => {
+      resolveSubmit = resolve;
+    });
+    const onSubmit = vi.fn().mockReturnValue(pendingPromise);
+
+    render(<LoginPage onSubmit={onSubmit} />);
+
+    await user.type(screen.getByLabelText('Email address'), 'user@example.com');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(screen.getByLabelText('Email address')).toHaveProperty('disabled', true);
+    expect(screen.getByLabelText('Password')).toHaveProperty('disabled', true);
+
+    resolveSubmit!();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Email address')).toHaveProperty('disabled', false);
+      expect(screen.getByLabelText('Password')).toHaveProperty('disabled', false);
     });
   });
 
